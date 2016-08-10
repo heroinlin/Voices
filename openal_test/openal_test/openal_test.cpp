@@ -76,9 +76,27 @@ void Play()
 {
 	// ²¥·Å
 	alSourcePlay(Source);
-	printf("Press Enter To Stop Sound\n");
+	/*printf("Press Enter To Stop Sound\n");
 	getchar();
-	alSourceStop(Source);
+	alSourceStop(Source);*/
+	ALubyte c = ' ';
+	printf("Press Enter h To Pause \np To Begin\ns To Stop Sound\n ");
+	while (c != 'q')
+	{
+		c = getchar();
+
+		switch (c)
+		{
+			// Pressing 'p' will begin playing the sample.  
+		case 'p': alSourcePlay(Source); break;
+
+			// Pressing 's' will stop the sample from playing.  
+		case 's': alSourceStop(Source); break;
+
+			// Pressing 'h' will pause (hold) the sample.  
+		case 'h': alSourcePause(Source); break;
+		};
+	}
 }
 
 int main(int argc, char *argv[])

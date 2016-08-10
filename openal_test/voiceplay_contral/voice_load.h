@@ -1,105 +1,129 @@
-#include <al.h>  
-#include <alc.h>  
-//#include <alu.h>  
-#include <alut.h>  
-// 存储声音数据  
-ALuint Buffer;
+#include <al.h>
+#include <alc.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<iostream>
+#include<fstream>
+#include<string>
+using namespace std;
+struct WAVE_Data {
+	char subChunkID[4]; //should contain the word data
+	long subChunk2Size; //Stores the size of the data block
+};
 
-// 用于播放声音  
-ALuint Source;
+struct WAVE_Format {
+	char subChunkID[4];
+	long subChunkSize;
+	short audioFormat;
+	short numChannels;
+	long sampleRate;
+	long byteRate;
+	short blockAlign;
+	short bitsPerSample;
+};
 
-/*
-这是程序处理结构的初始化。在OPENAL中三种不同的结构，所有关于声音播放和
-声音数据存储在一个内存中，源（source）是指向放声音的空间。明白源是非常
-的重要。源只播放内存中的背景声音数据。源也给出了特殊的属性如位置和速度。
-第三个对象是听者，用户就是那唯一的听者。听者属性属于源属性，决定如何
-听声音。例如，不同位置将决定声音的速度。
-*/
+struct RIFF_Header {
+	char chunkID[4];
+	long chunkSize;//size not including chunkSize or chunkID
+	char format[4];
+};
 
-// 源声音的位置  
-ALfloat SourcePos[] = { 0.0, 0.0, 0.0 };
+bool loadWavFile(const std::string filename, ALuint* buffer,
+	ALsizei* size, ALsizei* frequency,
+	ALenum* format) {
+	//Local Declarations
+	FILE* soundFile = NULL;
+	WAVE_Format wave_format;
+	RIFF_Header riff_header;
+	WAVE_Data wave_data;
+	unsigned char* data;
 
-// 源声音的速度  
-ALfloat SourceVel[] = { 0.0, 0.0, 0.0 };
+	try {
+		soundFile = fopen(filename.c_str(), "rb");
+		if (!soundFile)
+			throw (filename);
 
-// 听者的位置  
-ALfloat ListenerPos[] = { 0.0, 0.0, 0.0 };
+		// Read in the first chunk into the struct
+		fread(&riff_header, sizeof(RIFF_Header), 1, soundFile);
 
-// 听者的速度  
-ALfloat ListenerVel[] = { 0.0, 0.0, 0.0 };
+		//check for RIFF and WAVE tag in memeory
+		if ((riff_header.chunkID[0] != 'R' ||
+			riff_header.chunkID[1] != 'I' ||
+			riff_header.chunkID[2] != 'F' ||
+			riff_header.chunkID[3] != 'F') ||
+			(riff_header.format[0] != 'W' ||
+			riff_header.format[1] != 'A' ||
+			riff_header.format[2] != 'V' ||
+			riff_header.format[3] != 'E'))
+			throw ("Invalid RIFF or WAVE Header");
 
-// 听者的方向 (first 3 elements are "at", second 3 are "up")  
-ALfloat ListenerOri[] = { 0.0, 0.0, -1.0, 0.0, 1.0, 0.0 };
+		//Read in the 2nd chunk for the wave info
+		fread(&wave_format, sizeof(WAVE_Format), 1, soundFile);
+		//check for fmt tag in memory
+		if (wave_format.subChunkID[0] != 'f' ||
+			wave_format.subChunkID[1] != 'm' ||
+			wave_format.subChunkID[2] != 't' ||
+			wave_format.subChunkID[3] != ' ')
+			throw ("Invalid Wave Format");
 
-ALbyte *voicefile = "wave1.wav";
+		//check for extra parameters;
+		if (wave_format.subChunkSize > 16)
+			fseek(soundFile, sizeof(short), SEEK_CUR);
 
-/*
-在上面的代码中，我们定义了源和听者对象的位置和速度。这些数组是基于笛
-卡儿坐标的矢量。你能很容易用结构或类做相同的事情。
-*/
+		//Read in the the last byte of data before the sound file
+		fread(&wave_data, sizeof(WAVE_Data), 1, soundFile);
+		//check for data tag in memory
+		if (wave_data.subChunkID[0] != 'd' ||
+			wave_data.subChunkID[1] != 'a' ||
+			wave_data.subChunkID[2] != 't' ||
+			wave_data.subChunkID[3] != 'a')
+			throw ("Invalid data header");
 
-ALboolean LoadALData()
-{
-	// 载入变量.  
+		//Allocate memory for data
+		data = new unsigned char[wave_data.subChunk2Size];
 
-	ALenum format;
-	ALsizei size;
-	ALvoid* data;
-	//ALsizei freq;
-	ALfloat freq;
-	ALboolean loop;
-	//在这里我们建立一个函数用于从一个文件中载入声音数据。变量用于存储适合  
-	//我们的ALUT信息。  
+		// Read in the sound data into the soundData variable
+		if (!fread(data, wave_data.subChunk2Size, 1, soundFile))
+			throw ("error loading WAVE data into struct!");
 
-	// 载入WAV数据  
-	alGenBuffers(1, &Buffer);
-	if (alGetError() != AL_NO_ERROR)
-		return AL_FALSE;
-	//alutLoadWAVFile(voicefile, &format, &data, &size, &freq, &loop);
-	alutLoadMemoryFromFile(voicefile, &format, &size,&freq);
-	//alBufferData(Buffer, format, data, size, freq);
-	//alutUnloadWAV(format, data, size, freq);
-	/*
-	函数alGenBufers用于建立对象内存并把他们存储在我们定义的变量中。然后判断
-	数据是否存储。
-	ALUT库为我们打开文件，提供我们建立内存所需的信息，并且在我们归属所有
-	数据到内存后，她将处理这些数据。
-	*/
-	// 捆绑源  
-	alGenSources(1, &Source);
-
-	if (alGetError() != AL_NO_ERROR)
-		return AL_FALSE;
-
-	alSourcei(Source, AL_BUFFER, Buffer);
-	alSourcef(Source, AL_PITCH, 1.0f);
-	alSourcef(Source, AL_GAIN, 1.0f);
-	alSourcefv(Source, AL_POSITION, SourcePos);
-	alSourcefv(Source, AL_VELOCITY, SourceVel);
-	//alSourcei(Source, AL_LOOPING, loop);
-	/*
-	我们用建立内存对象的方法建立了源对象。然后，我们定义源属性用于录放。
-	最重要的属性是她用的内存。这告诉源用于录放。因此，我们只有捆绑她。同时，
-	我们也告诉她我们定义的源位置和速度。
-	*/
-	// 做错误检测并返回  
-	if (alGetError() == AL_NO_ERROR)
-		return AL_TRUE;
-
-	return AL_FALSE;
-	//在函数的结尾，我们将做更多的检测，以确定她的正确。  
+		//Now we set the variables that we passed in with the
+		//data from the structs
+		*size = wave_data.subChunk2Size;
+		*frequency = wave_format.sampleRate;
+		//The format is worked out by looking at the number of
+		//channels and the bits per sample.
+		if (wave_format.numChannels == 1) {
+			if (wave_format.bitsPerSample == 8)
+				*format = AL_FORMAT_MONO8;
+			else if (wave_format.bitsPerSample == 16)
+				*format = AL_FORMAT_MONO16;
+		}
+		else if (wave_format.numChannels == 2) {
+			if (wave_format.bitsPerSample == 8)
+				*format = AL_FORMAT_STEREO8;
+			else if (wave_format.bitsPerSample == 16)
+				*format = AL_FORMAT_STEREO16;
+		}
+		//create our openAL buffer and check for success
+		alGenBuffers(1, buffer);
+		//errorCheck();
+		//now we put our data into the openAL buffer and
+		//check for success
+		alBufferData(*buffer, *format, (void*)data,
+			*size, *frequency);
+		//errorCheck();
+		//clean up and return true if successful
+		fclose(soundFile);
+		return true;
+	}
+	catch (std::string error) {
+		//our catch statement for if we throw a string
+		std::cerr << error << " : trying to load "
+			<< filename << std::endl;
+		//clean up memory if wave loading fails
+		if (soundFile != NULL)
+			fclose(soundFile);
+		//return false to indicate the failure to load wave
+		return false;
+	}
 }
-void SetListenervalues()
-{
-	alListenerfv(AL_POSITION, ListenerPos);
-	alListenerfv(AL_VELOCITY, ListenerVel);
-	alListenerfv(AL_ORIENTATION, ListenerOri);
-}
-//我们建立一个函数用于更新听者速度。  
-void KillALData()
-{
-	alDeleteBuffers(1, &Buffer);
-	alDeleteSources(1, &Source);
-	alutExit();
-}
-//这是一个关闭函数，用于释放内存和音频设备。  

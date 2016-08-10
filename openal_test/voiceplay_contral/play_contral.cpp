@@ -6,38 +6,23 @@
 //#include <alu.h>  
 #include <alut.h>  
 #include "voice_load.h"
-
-/*********************************************************************************
-This is the interesting part of the tutorial. It's a very basic loop that lets us
-control the playback of the audio sample. Pressing 'p' will replay the sample,
-pressing 's' will stop the sample, and pressing 'h' will pause the sample.
-Pressing 'q' will exit the program.
-*********************************************************************************/
-
-
-
-int main(int argc, char *argv[])
+ALuint alSource;
+ALuint source;
+ALsizei size2;
+ALsizei frequent;
+ALenum format;
+int main(int argc,char**argv)
 {
-	// 初始OPENAL并清错误字节  
+	char *voice_path = argv[1];
+	alcMakeContextCurrent(alcCreateContext(alcOpenDevice(NULL), NULL));
 
-	alutInit(&argc, argv);
-	alGetError();
-	/*
-	函数alutInit将安装ALC需要的东西。ALUT通过ALC并设置她为当前建立OPENAL
-	环境描述。在WINDOWS平台上初始DIRECTSOUND。然后用‘GLGETERROR’检测错误。
-	*/
-	// 载入WAV数据  
-	if (LoadALData() == AL_FALSE)
-		return -1;
-
-	SetListenervalues();
-
-	// 设置退出函数  
-	atexit(KillALData);
-
-	//我们将检测WAV文件是否正确载入。如果没有退出程序。正确后，更新听者参数，最后退出。  
+	//openal播放音频1
+	loadWavFile(voice_path, &alSource, &size2, &frequent, &format);
+	alGenSources(1, &source);
+	alSourcei(source, AL_BUFFER, alSource);
+	alSourcePlay(source);
 	ALubyte c = ' ';
-
+	printf("Press Enter h To Pause \np To Begin\ns To Stop Sound\n ");
 	while (c != 'q')
 	{
 		c = getchar();
@@ -45,16 +30,15 @@ int main(int argc, char *argv[])
 		switch (c)
 		{
 			// Pressing 'p' will begin playing the sample.  
-		case 'p': alSourcePlay(Source); break;
+		case 'p': alSourcePlay(source); break;
 
 			// Pressing 's' will stop the sample from playing.  
-		case 's': alSourceStop(Source); break;
+		case 's': alSourceStop(source); break;
 
 			// Pressing 'h' will pause (hold) the sample.  
-		case 'h': alSourcePause(Source); break;
+		case 'h': alSourcePause(source); break;
 		};
 	}
-
 	return 0;
 }
 
